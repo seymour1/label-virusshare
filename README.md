@@ -16,7 +16,7 @@ This project aims to provide the VirusTotal analyses for each file in the VirusS
 
 # To Run:
 1. Fork the repository
-2. Copy and paste your API key into api_key
+2. In the root of the repository, copy and paste your API key into a file called api_key
 3. Run ./generate\_parameters.sh and choose any pair of resulting parameters (e.g. 10 1)
 4. Run scrape\_analyses.py with those parameters (e.g. python scrape\_analyses.py 10 1). This should take about an hour to run, and will use up your entire VirusTotal quota for the day.
 5. git add the resulting analysis file, commit, push, and do a pull request for that file into this repository.
