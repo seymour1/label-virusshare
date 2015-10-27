@@ -3,6 +3,7 @@ import urllib
 import urllib2
 import time
 import argparse
+import os.path
 
 BATCH_SIZE = 25          # VirusTotal allows 25 analyses per HTTP request
 BATCHES_PER_DAY = 230    # Can make 5760 requests/day = 230 batches
@@ -39,11 +40,18 @@ def main(hash_num, chunk_num):
     if chunk_num < 0 or chunk_num > 11:
         raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
 
+    if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
+        raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
+
     start_batch = chunk_num * BATCH_SIZE * BATCHES_PER_DAY
     end_batch = (chunk_num + 1) * BATCH_SIZE * BATCHES_PER_DAY
 
     # For each batch of hashes...
+    counter = 0
     for batch in batch_hashes(hash_num)[start_batch:end_batch]:
+
+        print "Sending batch " + str(counter) + "/" + BATCHES_PER_DAY
+        counter += 1
 
         # Request the most recent analyses of those hashes from VirusTotal
         results = json.loads(retrieve_batch(batch))
@@ -53,7 +61,7 @@ def main(hash_num, chunk_num):
             results[i]['md5'] = batch[i]  # Add the MD5 hash to the VT results, to easily map to VirusShare corpus
 
             # Write the analysis to the corresponding file on disk, to be easily unsplit later
-            with open("analyses/VirusShare_00" + str(chunk_num).zfill(3) + ".ldjson." + str(batch_num),'a') as file:
+            with open("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num),'a') as file:
                 file.write(json.dumps(results[i]) + "\n")
 
         # Throttle down to respect 4 HTTP requests/minute
