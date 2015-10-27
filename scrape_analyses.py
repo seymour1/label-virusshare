@@ -43,11 +43,11 @@ def main(hash_num, chunk_num):
     if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
         raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
 
-    start_batch = chunk_num * BATCH_SIZE * BATCHES_PER_DAY
-    end_batch = (chunk_num + 1) * BATCH_SIZE * BATCHES_PER_DAY
+    start_batch = chunk_num * BATCHES_PER_DAY
+    end_batch = (chunk_num + 1) * BATCHES_PER_DAY
 
+    counter = 0 # Only used for printing status
     # For each batch of hashes...
-    counter = 0
     for batch in batch_hashes(hash_num)[start_batch:end_batch]:
 
         print "Sending batch " + str(counter) + "/" + BATCHES_PER_DAY
