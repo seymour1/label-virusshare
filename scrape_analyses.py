@@ -50,7 +50,7 @@ def main(hash_num, chunk_num):
     # For each batch of hashes...
     for batch in batch_hashes(hash_num)[start_batch:end_batch]:
 
-        print "Sending batch " + str(counter) + "/" + BATCHES_PER_DAY
+        print "Sending batch " + str(counter) + "/" + str(BATCHES_PER_DAY)
         counter += 1
 
         # Request the most recent analyses of those hashes from VirusTotal
