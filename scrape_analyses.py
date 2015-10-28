@@ -5,6 +5,7 @@ import time
 import argparse
 import os.path
 import random
+import socket
 
 BATCH_SIZE = 25          # VirusTotal allows 25 analyses per HTTP request
 BATCHES_PER_DAY = 230    # Can make 5760 requests/day = 230 batches
@@ -29,7 +30,11 @@ def retrieve_batch(batch):
                   "apikey": api_key}
     data = urllib.urlencode(parameters)
     req = urllib2.Request(url, data)
-    response = urllib2.urlopen(req)
+    try:
+        response = urllib2.urlopen(req, timeout = 20)
+    except socket.timeout:
+        # This doesn't happen often, so just try again
+        response = urllib2.urlopen(req)
     results = response.read()
     return results
 
