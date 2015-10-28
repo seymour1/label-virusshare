@@ -4,6 +4,8 @@ import urllib2
 import time
 import argparse
 import os.path
+import random
+import socket
 
 BATCH_SIZE = 25          # VirusTotal allows 25 analyses per HTTP request
 BATCHES_PER_DAY = 230    # Can make 5760 requests/day = 230 batches
@@ -28,20 +30,38 @@ def retrieve_batch(batch):
                   "apikey": api_key}
     data = urllib.urlencode(parameters)
     req = urllib2.Request(url, data)
-    response = urllib2.urlopen(req)
+    try:
+        response = urllib2.urlopen(req, timeout = 20)
+    except socket.timeout:
+        # This doesn't happen often, so just try again
+        response = urllib2.urlopen(req)
     results = response.read()
     return results
 
-def main(hash_num, chunk_num):
+def main(position):
 
-    if hash_num < 0 or hash_num > 210:
-        raise ValueError('Invalid argument, hash number must be in range(0, 210)')
+    if position:
+        if len(position) != 2:
+            raise ValueError('Incorrect number of arguments. Must include hash number and chunk number.')
 
-    if chunk_num < 0 or chunk_num > 11:
-        raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
+        hash_num = int(position[0])
+        chunk_num = int(position[1])
 
-    if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
-        raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
+        if hash_num < 0 or hash_num > 210:
+            raise ValueError('Invalid argument, hash number must be in range(0, 210)')
+
+        if chunk_num < 0 or chunk_num > 11:
+            raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
+
+        if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
+            raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
+
+    else:
+        hash_num = random.randint(0,210)
+        chunk_num = random.randint(0,11)
+        while os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
+            hash_num = random.randint(0,210)
+            chunk_num = random.randint(0,11)
 
     start_batch = chunk_num * BATCHES_PER_DAY
     end_batch = (chunk_num + 1) * BATCHES_PER_DAY
@@ -69,8 +89,7 @@ def main(hash_num, chunk_num):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Retrieve results for single VirusShare chunk')
-    parser.add_argument('hash_num', help='The file number for the VirusShare hashes, i.e. {0..210}')
-    parser.add_argument('chunk_num', help='Which chunk of batches to work on, i.e. {0..11}')
+    parser.add_argument('-p','--position', nargs='+', help='Set file number (0..210) and chunk of batches (0..11)', required=False)
     args = parser.parse_args()
-    main(int(args.hash_num), int(args.chunk_num))
+    main(args.position)
     exit()
