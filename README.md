@@ -13,6 +13,7 @@ This project aims to provide the VirusTotal analyses for each file in the VirusS
 # Requirements
 * Python 2.7 (will not currently work under Python 3.0)
 * Active VirusTotal API public key (PLEASE do not use a VT private API key, for licensing issues)
+* [Git Large File Storage](https://git-lfs.github.com/): a git extension for versioning large files.
 
 # To Run:
 1. Fork the repository.
