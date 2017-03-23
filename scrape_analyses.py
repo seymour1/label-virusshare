@@ -6,6 +6,8 @@ import argparse
 import os.path
 import random
 import socket
+from retrying import retry
+import sys
 
 BATCH_SIZE = 25          # VirusTotal allows 25 analyses per HTTP request
 BATCHES_PER_DAY = 230    # Can make 5760 requests/day = 230 batches
@@ -20,25 +22,22 @@ def batch_hashes(hash_num):
 
 # Given a batch of hashes, retrieve latest analyses for those hashes
 # to VirusTotal in one HTTP request.
-# Straight from VirusTotal API documentation.
-def retrieve_batch(batch):
+# Straight from VirusTotal API documentation, except for retry decorator
+@retry(stop_max_attempt_number=5)
+def retrieve_batch(batch, user):
     url = "https://www.virustotal.com/vtapi/v2/file/report"
-    with open("api_key",'r') as key_file:
+    with open(user,'r') as key_file:
         api_key = key_file.readlines()[0].strip()
     resource_str = ','.join(batch)
     parameters = {"resource": resource_str,
                   "apikey": api_key}
     data = urllib.urlencode(parameters)
     req = urllib2.Request(url, data)
-    try:
-        response = urllib2.urlopen(req, timeout = 20)
-    except socket.timeout:
-        # This doesn't happen often, so just try again
-        response = urllib2.urlopen(req)
+    response = urllib2.urlopen(req, timeout = 20)
     results = response.read()
     return results
 
-def main(position):
+def main(user, position):
 
     if position:
         if len(position) != 2:
@@ -47,24 +46,34 @@ def main(position):
         hash_num = int(position[0])
         chunk_num = int(position[1])
 
-        if hash_num < 0 or hash_num > 210:
-            raise ValueError('Invalid argument, hash number must be in range(0, 210)')
+        if hash_num < 0 or hash_num > 283:
+            raise ValueError('Invalid argument, hash number must be in range(0, 283)')
 
-        if chunk_num < 0 or chunk_num > 11:
+        if hash_num > 148 and (chunk_num < 0 or chunk_num > 11):
+            raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
+
+        if hash_num <= 148 and (chunk_num < 0 or chunk_num > 22):
             raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
 
         if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
             raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
 
     else:
-        hash_num = random.randint(0,210)
-        chunk_num = random.randint(0,11)
+        hash_num = 252
+        chunk_num = 11
         while os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
-            hash_num = random.randint(0,210)
-            chunk_num = random.randint(0,11)
+            chunk_num = chunk_num - 1
+            if chunk_num < 0:
+                chunk_num = 11
+                hash_num = hash_num - 1
+            if hash_num < 0:
+                sys.exit()
 
+    print "Starting. Hash Number = " + str(hash_num) + "; Chunk number = " + str(chunk_num)
     start_batch = chunk_num * BATCHES_PER_DAY
     end_batch = (chunk_num + 1) * BATCHES_PER_DAY
+    with open("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num),'a') as file:
+        pass
 
     counter = 0 # Only used for printing status
     # For each batch of hashes...
@@ -74,7 +83,7 @@ def main(position):
         counter += 1
 
         # Request the most recent analyses of those hashes from VirusTotal
-        results = json.loads(retrieve_batch(batch))
+        results = json.loads(retrieve_batch(batch, user))
 
         # For each analysis...
         for i in xrange(BATCH_SIZE):
@@ -89,7 +98,8 @@ def main(position):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'Retrieve results for single VirusShare chunk')
-    parser.add_argument('-p','--position', nargs='+', help='Set file number (0..210) and chunk of batches (0..11)', required=False)
+    parser.add_argument('user', help='file with api_key')
+    parser.add_argument('-p','--position', nargs='+', help='Set file number (0..283) and chunk of batches (0..11)', required=False)
     args = parser.parse_args()
-    main(args.position)
+    main(args.user, args.position)
     exit()
