@@ -1,3 +1,4 @@
-api_key
-analyses/*
-hashes/*
+analyses/
+hashes/
+key/
+env/
