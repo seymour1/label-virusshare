@@ -59,15 +59,13 @@ def main(user, position):
             raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
 
     else:
-        hash_num = 252
-        chunk_num = 11
+        hash_num = 149
+        chunk_num = 0
         while os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
-            chunk_num = chunk_num - 1
-            if chunk_num < 0:
-                chunk_num = 11
-                hash_num = hash_num - 1
-            if hash_num < 0:
-                sys.exit()
+            chunk_num = chunk_num + 1
+            if chunk_num > 11:
+                chunk_num = 0
+                hash_num = hash_num + 1
 
     print "Starting. Hash Number = " + str(hash_num) + "; Chunk number = " + str(chunk_num)
     start_batch = chunk_num * BATCHES_PER_DAY
