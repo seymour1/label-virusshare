@@ -13,11 +13,8 @@ This project aims to provide the VirusTotal analyses for each file in the VirusS
 # Requirements
 * Python 2.7 (will not currently work under Python 3.0)
 * Active VirusTotal API public key (PLEASE do not use a VT private API key, for licensing issues)
-* [Git Large File Storage](https://git-lfs.github.com/): a git extension for versioning large files.
 
 # To Run:
-1. Fork the repository.
-2. In the root of the repository, copy and paste your API key into a file called api_key.
-3. Run scrape\_analyses.py with no parameters. This should take about an hour to run, and will use up your entire VirusTotal quota for the day.
-4. git add the resulting analysis file, commit, push, and do a pull request for that file into this repository.
-5. Before running again, merge upstream changes.
+1. Clone the repository.
+2. In the root of the repository, copy and paste your API key into a file.
+3. Run scrape\_analyses.py with your key file as a parameter, and optionally a hash/chunk pair. This should use up your entire VirusTotal quota for the day, and will label a corresponding section of the VirusShare data.
