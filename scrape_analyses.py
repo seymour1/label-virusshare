@@ -1,4 +1,4 @@
-import simplejson as json
+import json
 import urllib
 import urllib2
 import time
@@ -8,15 +8,19 @@ import random
 import socket
 from retrying import retry
 import sys
+import pprint
+from Queue import Queue
+from threading import Thread
+import time
+import datetime
 
-BATCH_SIZE = 25          # VirusTotal allows 25 analyses per HTTP request
-BATCHES_PER_DAY = 230    # Can make 5760 requests/day = 230 batches
+BATCH_SIZE = 4          # VirusTotal allows 4 analyses per HTTP request
 
 # Given a VirusShare md5 hash file, return a list of lists of BATCH_SIZE hashes
-def batch_hashes(hash_num):
-    with open(("hashes/VirusShare_00" + str(hash_num).zfill(3) + ".md5"),'r') as file:
+def batch_hashes(hashnum):
+    with open(("hashes/VirusShare_00" + str(hashnum).zfill(3) + ".md5"),'r') as infile:
         # First 6 lines of hashes file are file descriptors
-        hashes = [line.strip() for line in file.readlines()[6:]]
+        hashes = [line.strip() for line in infile.readlines()[6:]]
     # Batch up the hashes in chunks of size batchsize
     return [hashes[i:i+BATCH_SIZE] for i in xrange(0, len(hashes), BATCH_SIZE)]
 
@@ -24,10 +28,8 @@ def batch_hashes(hash_num):
 # to VirusTotal in one HTTP request.
 # Straight from VirusTotal API documentation, except for retry decorator
 @retry(stop_max_attempt_number=5)
-def retrieve_batch(batch, user):
+def retrieve_batch(batch, api_key):
     url = "https://www.virustotal.com/vtapi/v2/file/report"
-    with open(user,'r') as key_file:
-        api_key = key_file.readlines()[0].strip()
     resource_str = ','.join(batch)
     parameters = {"resource": resource_str,
                   "apikey": api_key}
@@ -37,67 +39,65 @@ def retrieve_batch(batch, user):
     results = response.read()
     return results
 
-def main(user, position):
-
-    if position:
-        if len(position) != 2:
-            raise ValueError('Incorrect number of arguments. Must include hash number and chunk number.')
-
-        hash_num = int(position[0])
-        chunk_num = int(position[1])
-
-        if hash_num < 0 or hash_num > 283:
-            raise ValueError('Invalid argument, hash number must be in range(0, 283)')
-
-        if hash_num > 148 and (chunk_num < 0 or chunk_num > 11):
-            raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
-
-        if hash_num <= 148 and (chunk_num < 0 or chunk_num > 22):
-            raise ValueError('Invalid argument, chunk number must be in range(0, 11)')
-
-        if os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
-            raise ValueError('The chosen hash/chunk numbers have already been analyzed. Try another pair.')
-
-    else:
-        hash_num = 149
-        chunk_num = 0
-        while os.path.exists("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num)):
-            chunk_num = chunk_num + 1
-            if chunk_num > 11:
-                chunk_num = 0
-                hash_num = hash_num + 1
-
-    print "Starting. Hash Number = " + str(hash_num) + "; Chunk number = " + str(chunk_num)
-    start_batch = chunk_num * BATCHES_PER_DAY
-    end_batch = (chunk_num + 1) * BATCHES_PER_DAY
-    with open("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num),'a') as file:
-        pass
-
-    counter = 0 # Only used for printing status
-    # For each batch of hashes...
-    for batch in batch_hashes(hash_num)[start_batch:end_batch]:
-
-        print "Sending batch " + str(counter) + "/" + str(BATCHES_PER_DAY)
-        counter += 1
+# Thread-Safe function for removing a batch from the queue and sending to VirusTotal.
+def label_batch(in_q, out_q, api_key):
+    while not in_q.empty():
+        batch = in_q.get()
 
         # Request the most recent analyses of those hashes from VirusTotal
-        results = json.loads(retrieve_batch(batch, user))
-
+        results = json.loads(retrieve_batch(batch, api_key))
         # For each analysis...
         for i in xrange(BATCH_SIZE):
             results[i]['md5'] = batch[i]  # Add the MD5 hash to the VT results, to easily map to VirusShare corpus
-
-            # Write the analysis to the corresponding file on disk, to be easily unsplit later
-            with open("analyses/VirusShare_00" + str(hash_num).zfill(3) + ".ldjson." + str(chunk_num),'a') as file:
-                file.write(json.dumps(results[i]) + "\n")
-
+        out_q.put(results)
+        in_q.task_done()
         # Throttle down to respect 4 HTTP requests/minute
         time.sleep(15)
 
+# Thread-Safe handler for writing results to file.
+def output_results(in_q, out_q, hashnum):
+    # Write the analysis to the corresponding file on disk, to be easily unsplit later
+    with open("analyses/VirusShare_00" + str(hashnum).zfill(3) + ".ldjson",'w') as outfile:
+        while not in_q.empty():
+            while not out_q.empty():
+                for result in out_q.get():
+                    outfile.write(json.dumps(result) + "\n")
+                    outfile.flush()
+                out_q.task_done()
+
+def main(hashnum):
+
+    if os.path.exists("analyses/VirusShare_00" + str(hashnum).zfill(3) + ".ldjson"):
+        raise ValueError('The chosen hash number has already been analyzed. Try another.')
+
+    in_q = Queue()
+    out_q = Queue()
+
+    with open("keys.txt",'r') as keyfile:
+        api_keys = [line.strip() for line in keyfile]
+
+    for batch in batch_hashes(hashnum):
+        in_q.put(batch)
+
+    workers = {}
+    for api_key in api_keys:
+        workers[api_key] = Thread(target=label_batch, args=(in_q, out_q, api_key))
+        workers[api_key].setDaemon(True)
+        workers[api_key].start()
+
+    out_worker = Thread(target=output_results, args=(in_q, out_q, hashnum))
+    out_worker.setDaemon(True)
+    out_worker.start()
+
+    in_q.join()
+    out_q.join()
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description = 'Retrieve results for single VirusShare chunk')
-    parser.add_argument('user', help='file with api_key')
-    parser.add_argument('-p','--position', nargs='+', help='Set file number (0..283) and chunk of batches (0..11)', required=False)
+    parser = argparse.ArgumentParser(description = 'Retrieve results for single VirusShare md5 file')
+    parser.add_argument('-n','--hashnum', help='Set file number', required=True)
     args = parser.parse_args()
-    main(args.user, args.position)
+    main(args.hashnum)
     exit()
+
+
+
