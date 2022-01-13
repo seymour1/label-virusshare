@@ -1,6 +1,6 @@
 # label-virusshare
 
-A project to label the VirusShare malware corpus using VirusTotal's public API.
+A project to label the VirusShare malware corpus using VirusTotal's public API. This project has been deprecated- check out [ember](https://github.com/elastic/ember) or [SOREL](https://github.com/sophos-ai/SOREL-20M) if you want more up-to-date samples. The outcomes of this labeler (chunks 000 through 357) are available [here](https://drive.google.com/drive/folders/0B_IN6RzP69b2WC1wUjNqajYxRXM) with no intentions of future updates; these can be used for historical analyses of malware families.
 
 # Description
 
