@@ -69,7 +69,7 @@ if __name__ == '__main__':
     with open("keys",'r') as keyfile:
         api_keys = [line.strip() for line in keyfile]
 
-    batches = batch_hashes(253, 325)
+    batches = batch_hashes(0,8)
     distributed = distribute_batches(api_keys, batches)
 
     loop = asyncio.get_event_loop()
